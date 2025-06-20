@@ -1,0 +1,61 @@
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+
+// Middleware: Verify JWT token & attach user info to request
+exports.authenticate = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer '))
+      return res.status(401).json({ message: 'No token provided' });
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const user = await User.findById(decoded.id).select('-password');
+    if (!user)
+      return res.status(401).json({ message: 'User not found' });
+
+    // Optionally check if user email is verified
+    if (!user.isVerified)
+      return res.status(403).json({ message: 'Email not verified' });
+
+    req.user = user; // attach user object to req
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: 'Token is invalid or expired' });
+  }
+};
+
+// Middleware: Authorize based on allowed roles (array)
+exports.authorizeRoles = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user)
+      return res.status(401).json({ message: 'Not authenticated' });
+
+    if (!allowedRoles.includes(req.user.role))
+      return res.status(403).json({ message: 'Access denied: insufficient role' });
+
+    next();
+  };
+};
+How to Use Middleware
+Protect any route with authentication:
+js
+Copy
+Edit
+const { authenticate } = require('./middlewares/authMiddleware');
+
+app.get('/api/guards', authenticate, (req, res) => {
+  // req.user is available here
+  res.json({ message: 'Access granted', user: req.user });
+});
+Protect route by role(s):
+js
+Copy
+Edit
+const { authenticate, authorizeRoles } = require('./middlewares/authMiddleware');
+
+app.post('/api/admin-only', authenticate, authorizeRoles('admin', 'hr'), (req, res) => {
+  res.json({ message: 'Hello admin or HR!' });
+});
