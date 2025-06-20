@@ -1,0 +1,231 @@
+ PART 1: MongoDB Database Structure (NoSQL)
+Each collection maps to a functional part of your system.
+
+🔹 1. users (Admin, HR, Clients, Guards)
+js
+Copy
+Edit
+{
+  _id: ObjectId,
+  fullName: String,
+  email: String,
+  passwordHash: String,
+  role: "admin" | "hr" | "guard" | "client",
+  phone: String,
+  emailVerified: Boolean,
+  isActive: Boolean,
+  createdAt: Date,
+  updatedAt: Date
+}
+🔹 2. applicants
+js
+Copy
+Edit
+{
+  _id: ObjectId,
+  personalInfo: {
+    firstName: String,
+    middleName: String,
+    lastName: String,
+    birthDate: Date,
+    gender: String,
+    contactNumber: String,
+    email: String,
+    address: String
+  },
+  credentials: {
+    barangayClearance: String,  // file URL
+    NCI: String,                // file URL
+    trainingRecords: [String],
+    otherDocuments: [String]
+  },
+  assessment: {
+    score: Number,
+    remarks: String,
+    assessedBy: ObjectId,  // ref to users
+    assessedAt: Date
+  },
+  applicationStatus: "pending" | "under_review" | "interviewed" | "hired" | "rejected",
+  documentsUploadedAt: { ... },
+  appliedAt: Date,
+  updatedAt: Date
+}
+🔹 3. guards (subset of users, or standalone)
+js
+Copy
+Edit
+{
+  _id: ObjectId,
+  userId: ObjectId,  // ref to users
+  assignment: {
+    postLocation: String,
+    shift: String
+  },
+  status: "on-duty" | "off-duty" | "standby",
+  attendance: [
+    {
+      checkIn: Date,
+      checkOut: Date,
+      photoURL: String,
+      verified: Boolean
+    }
+  ],
+  incidents: [
+    {
+      type: "commendation" | "violation",
+      description: String,
+      date: Date
+    }
+  ]
+}
+🔹 4. feedbacks
+js
+Copy
+Edit
+{
+  _id: ObjectId,
+  from: ObjectId,  // user
+  toGuard: ObjectId,
+  message: String,
+  rating: Number, // optional
+  createdAt: Date,
+  type: "complaint" | "compliment" | "leave-request",
+  status: "pending" | "resolved" | "escalated",
+  resolvedBy: ObjectId,
+  resolutionNote: String
+}
+🔹 5. replacements
+js
+Copy
+Edit
+{
+  _id: ObjectId,
+  clientId: ObjectId,
+  originalGuardId: ObjectId,
+  reason: String,
+  requestedAt: Date,
+  status: "pending" | "assigned" | "cancelled",
+  assignedGuardId: ObjectId,
+  resolvedAt: Date
+}
+🟡 PART 2: MySQL Database Schema (Relational)
+🔹 Tables Overview:
+users
+
+applicants
+
+guards
+
+attendances
+
+feedbacks
+
+replacements
+
+📄 users
+sql
+Copy
+Edit
+CREATE TABLE users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  full_name VARCHAR(100),
+  email VARCHAR(100) UNIQUE,
+  password_hash TEXT,
+  role ENUM('admin', 'hr', 'guard', 'client'),
+  phone VARCHAR(20),
+  email_verified BOOLEAN DEFAULT FALSE,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+📄 applicants
+sql
+Copy
+Edit
+CREATE TABLE applicants (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  first_name VARCHAR(50),
+  middle_name VARCHAR(50),
+  last_name VARCHAR(50),
+  birth_date DATE,
+  gender VARCHAR(10),
+  contact_number VARCHAR(20),
+  email VARCHAR(100),
+  address TEXT,
+
+  barangay_clearance TEXT,
+  nci TEXT,
+  training_records TEXT,
+  other_documents TEXT,
+
+  score INT,
+  remarks TEXT,
+  assessed_by INT,
+  assessed_at DATETIME,
+  application_status ENUM('pending', 'under_review', 'interviewed', 'hired', 'rejected'),
+  applied_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (assessed_by) REFERENCES users(id)
+);
+📄 guards
+sql
+Copy
+Edit
+CREATE TABLE guards (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT,
+  post_location VARCHAR(100),
+  shift VARCHAR(50),
+  status ENUM('on-duty', 'off-duty', 'standby'),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+📄 attendances
+sql
+Copy
+Edit
+CREATE TABLE attendances (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  guard_id INT,
+  check_in DATETIME,
+  check_out DATETIME,
+  photo_url TEXT,
+  verified BOOLEAN DEFAULT FALSE,
+  FOREIGN KEY (guard_id) REFERENCES guards(id)
+);
+📄 feedbacks
+sql
+Copy
+Edit
+CREATE TABLE feedbacks (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  from_user INT,
+  to_guard INT,
+  message TEXT,
+  rating INT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  type ENUM('complaint', 'compliment', 'leave-request'),
+  status ENUM('pending', 'resolved', 'escalated'),
+  resolved_by INT,
+  resolution_note TEXT,
+  FOREIGN KEY (from_user) REFERENCES users(id),
+  FOREIGN KEY (to_guard) REFERENCES guards(id),
+  FOREIGN KEY (resolved_by) REFERENCES users(id)
+);
+📄 replacements
+sql
+Copy
+Edit
+CREATE TABLE replacements (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  client_id INT,
+  original_guard_id INT,
+  reason TEXT,
+  requested_at DATETIME,
+  status ENUM('pending', 'assigned', 'cancelled'),
+  assigned_guard_id INT,
+  resolved_at DATETIME,
+  FOREIGN KEY (client_id) REFERENCES users(id),
+  FOREIGN KEY (original_guard_id) REFERENCES guards(id),
+  FOREIGN KEY (assigned_guard_id) REFERENCES guards(id)
+);
