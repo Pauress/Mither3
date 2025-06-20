@@ -1,0 +1,83 @@
+🧱 STEP 1: Add availabilityStatus Field to Guard Model
+If you're using User.js to store guard data in MySQL (with Sequelize) or MongoDB, here’s how to add it:
+
+(A) If using MongoDB:
+models/User.js (MongoDB)
+js
+Copy
+Edit
+availabilityStatus: {
+  type: String,
+  enum: ['available', 'assigned', 'off-duty'],
+  default: 'available'
+}
+(B) If using MySQL via Sequelize:
+models/User.sql.js
+js
+Copy
+Edit
+availabilityStatus: {
+  type: DataTypes.ENUM('available', 'assigned', 'off-duty'),
+  defaultValue: 'available'
+}
+Don't forget to run a migration or sync changes if needed.
+
+🔍 STEP 2: Create Controller to Fetch Available Guards
+In controllers/guardReplacementController.js, add:
+js
+Copy
+Edit
+const User = require('../models/User');
+
+// Get guards that are available for replacement
+exports.getAvailableGuards = async (req, res) => {
+  try {
+    const availableGuards = await User.find({ 
+      role: 'guard', 
+      availabilityStatus: 'available' 
+    }).select('username _id');
+
+    res.json(availableGuards);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching available guards', error: err.message });
+  }
+};
+🛣️ STEP 3: Add Route to Get Available Guards
+routes/guardReplacementRoutes.js
+js
+Copy
+Edit
+router.get('/available-guards', auth, getAvailableGuards);
+🧠 STEP 4: Update Reliever Assignment Logic
+To prevent assigning a busy guard:
+
+js
+Copy
+Edit
+exports.assignReliever = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { assignedRelieverId } = req.body;
+
+    const reliever = await User.findById(assignedRelieverId);
+    if (reliever.availabilityStatus !== 'available') {
+      return res.status(400).json({ message: 'Reliever is not currently available' });
+    }
+
+    const request = await GuardReplacement.findById(id);
+    if (!request) return res.status(404).json({ message: 'Request not found' });
+
+    request.assignedRelieverId = assignedRelieverId;
+    request.status = 'completed';
+    request.processedAt = new Date();
+    await request.save();
+
+    // Update reliever's status
+    reliever.availabilityStatus = 'assigned';
+    await reliever.save();
+
+    res.json({ message: 'Reliever assigned successfully', request });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to assign reliever', error: err.message });
+  }
+};
