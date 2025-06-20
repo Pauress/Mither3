@@ -1,0 +1,56 @@
+const mongoose = require('mongoose');
+
+const applicantSchema = new mongoose.Schema({
+  personalInfo: {
+    firstName: { type: String, required: true },
+    middleName: { type: String },
+    lastName: { type: String, required: true },
+    birthDate: { type: Date, required: true },
+    gender: { type: String, enum: ['Male', 'Female', 'Other'], required: true },
+    contactNumber: { type: String, required: true },
+    email: { type: String, required: true, lowercase: true, unique: true },
+    address: { type: String, required: true }
+  },
+
+  credentials: {
+    barangayClearance: { type: String, required: true }, // URL or file path to doc
+    NCI: { type: String, required: true },                // National Certificate I number or file path
+    trainingRecords: [{ type: String }],                   // Array of URLs/paths to training docs
+    otherDocuments: [{ type: String }]                     // Any other document URLs or references
+  },
+
+  assessment: {
+    score: { type: Number, default: 0 },
+    remarks: { type: String },
+    assessedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // admin/HR who assessed
+    assessedAt: { type: Date }
+  },
+
+  applicationStatus: {
+    type: String,
+    enum: ['pending', 'under_review', 'assessed', 'interviewed', 'hired', 'rejected'],
+    default: 'pending'
+  },
+
+  // Track uploads timestamps for verification/logging
+  documentsUploadedAt: {
+    barangayClearance: { type: Date },
+    NCI: { type: Date },
+    trainingRecords: [{ type: Date }],
+    otherDocuments: [{ type: Date }]
+  },
+
+  appliedAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+
+  // Optional: applicant notes or admin comments
+  notes: { type: String }
+});
+
+// Middleware to update updatedAt before save
+applicantSchema.pre('save', function (next) {
+  this.updatedAt = Date.now();
+  next();
+});
+
+module.exports = mongoose.model('Applicant', applicantSchema);
