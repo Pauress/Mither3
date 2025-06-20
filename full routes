@@ -1,0 +1,165 @@
+routes/applicantRoutes.js
+js
+Copy
+Edit
+const express = require('express');
+const router = express.Router();
+const {
+  createApplicant,
+  getAllApplicants,
+  getApplicantById,
+  updateApplicantStatus,
+  uploadApplicantDocuments,
+  deleteApplicant,
+  searchApplicants
+} = require('../controllers/applicantController');
+
+const { authenticate, authorizeRoles } = require('../middlewares/authMiddleware');
+
+// Public: Register new applicant
+router.post('/register', createApplicant);
+
+// Admin/HR only: Get all applicants
+router.get('/', authenticate, authorizeRoles('admin', 'hr'), getAllApplicants);
+
+// Admin/HR only: Get applicant by ID
+router.get('/:id', authenticate, authorizeRoles('admin', 'hr'), getApplicantById);
+
+// Admin/HR only: Update applicant status
+router.patch('/:id/status', authenticate, authorizeRoles('admin', 'hr'), updateApplicantStatus);
+
+// Admin/HR only: Upload documents
+router.post('/:id/documents', authenticate, authorizeRoles('admin', 'hr'), uploadApplicantDocuments);
+
+// Admin/HR only: Delete applicant
+router.delete('/:id', authenticate, authorizeRoles('admin', 'hr'), deleteApplicant);
+
+// Admin/HR: Search applicants by query
+router.get('/search/:keyword', authenticate, authorizeRoles('admin', 'hr'), searchApplicants);
+
+module.exports = router;
+📁 controllers/applicantController.js
+js
+Copy
+Edit
+const Applicant = require('../models/Applicant');
+
+// Create new applicant (public)
+exports.createApplicant = async (req, res) => {
+  try {
+    const applicant = new Applicant(req.body);
+    await applicant.save();
+    res.status(201).json({ message: 'Application submitted', applicant });
+  } catch (err) {
+    res.status(400).json({ message: 'Failed to register applicant', error: err.message });
+  }
+};
+
+// Get all applicants (admin/hr)
+exports.getAllApplicants = async (req, res) => {
+  try {
+    const applicants = await Applicant.find().sort({ appliedAt: -1 });
+    res.json(applicants);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching applicants', error: err.message });
+  }
+};
+
+// Get specific applicant
+exports.getApplicantById = async (req, res) => {
+  try {
+    const applicant = await Applicant.findById(req.params.id);
+    if (!applicant) return res.status(404).json({ message: 'Applicant not found' });
+    res.json(applicant);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching applicant', error: err.message });
+  }
+};
+
+// Update application status (admin/hr)
+exports.updateApplicantStatus = async (req, res) => {
+  const { status, remarks, score } = req.body;
+
+  try {
+    const applicant = await Applicant.findById(req.params.id);
+    if (!applicant) return res.status(404).json({ message: 'Applicant not found' });
+
+    applicant.applicationStatus = status || applicant.applicationStatus;
+    applicant.assessment.remarks = remarks || applicant.assessment.remarks;
+    applicant.assessment.score = score || applicant.assessment.score;
+    applicant.assessment.assessedBy = req.user._id;
+    applicant.assessment.assessedAt = new Date();
+
+    await applicant.save();
+    res.json({ message: 'Application status updated', applicant });
+  } catch (err) {
+    res.status(400).json({ message: 'Update failed', error: err.message });
+  }
+};
+
+// Upload documents (admin/hr)
+exports.uploadApplicantDocuments = async (req, res) => {
+  // Expecting document URLs or file paths in body
+  const { barangayClearance, NCI, trainingRecords, otherDocuments } = req.body;
+
+  try {
+    const applicant = await Applicant.findById(req.params.id);
+    if (!applicant) return res.status(404).json({ message: 'Applicant not found' });
+
+    if (barangayClearance) {
+      applicant.credentials.barangayClearance = barangayClearance;
+      applicant.documentsUploadedAt.barangayClearance = new Date();
+    }
+
+    if (NCI) {
+      applicant.credentials.NCI = NCI;
+      applicant.documentsUploadedAt.NCI = new Date();
+    }
+
+    if (trainingRecords?.length) {
+      applicant.credentials.trainingRecords = trainingRecords;
+      applicant.documentsUploadedAt.trainingRecords = trainingRecords.map(() => new Date());
+    }
+
+    if (otherDocuments?.length) {
+      applicant.credentials.otherDocuments = otherDocuments;
+      applicant.documentsUploadedAt.otherDocuments = otherDocuments.map(() => new Date());
+    }
+
+    await applicant.save();
+    res.json({ message: 'Documents uploaded', applicant });
+  } catch (err) {
+    res.status(400).json({ message: 'Upload failed', error: err.message });
+  }
+};
+
+// Delete applicant
+exports.deleteApplicant = async (req, res) => {
+  try {
+    const applicant = await Applicant.findByIdAndDelete(req.params.id);
+    if (!applicant) return res.status(404).json({ message: 'Applicant not found' });
+
+    res.json({ message: 'Applicant deleted' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to delete', error: err.message });
+  }
+};
+
+// Search applicants
+exports.searchApplicants = async (req, res) => {
+  const keyword = req.params.keyword;
+  try {
+    const applicants = await Applicant.find({
+      $or: [
+        { 'personalInfo.firstName': { $regex: keyword, $options: 'i' } },
+        { 'personalInfo.lastName': { $regex: keyword, $options: 'i' } },
+        { 'personalInfo.email': { $regex: keyword, $options: 'i' } },
+        { applicationStatus: { $regex: keyword, $options: 'i' } }
+      ]
+    });
+
+    res.json(applicants);
+  } catch (err) {
+    res.status(500).json({ message: 'Search failed', error: err.message });
+  }
+};
