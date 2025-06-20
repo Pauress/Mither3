@@ -1,0 +1,518 @@
+Goal: Notify Admin via Email When a Complaint is Submitted
+We'll use Nodemailer (a popular Node.js library) to send emails.
+
+🛠 Step-by-Step Integration
+📦 STEP 1: Install Nodemailer
+bash
+Copy
+Edit
+npm install nodemailer
+🧰 STEP 2: Configure Nodemailer
+utils/emailService.js
+js
+Copy
+Edit
+const nodemailer = require('nodemailer');
+
+// Replace with your email credentials
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER, // e.g., yourcompany@gmail.com
+    pass: process.env.EMAIL_PASS  // use App Password if using Gmail
+  }
+});
+
+exports.sendComplaintNotification = async (complaintData) => {
+  const { type, message, submittedBy, targetGuard } = complaintData;
+
+  const mailOptions = {
+    from: `"Mither 3 Security" <${process.env.EMAIL_USER}>`,
+    to: process.env.ADMIN_EMAIL, // e.g., admin@youragency.com
+    subject: `[New ${type.toUpperCase()}] Submitted by ${submittedBy.username}`,
+    html: `
+      <h3>New ${type.toUpperCase()} Received</h3>
+      <p><strong>Submitted By:</strong> ${submittedBy.username}</p>
+      ${targetGuard ? `<p><strong>Targeted Guard:</strong> ${targetGuard.username}</p>` : ''}
+      <p><strong>Message:</strong> ${message}</p>
+      <p><em>Check the dashboard for more details.</em></p>
+    `
+  };
+
+  return transporter.sendMail(mailOptions);
+};
+🔐 Use .env file:
+
+ini
+Copy
+Edit
+EMAIL_USER=yourcompany@gmail.com
+EMAIL_PASS=your-email-password-or-app-password
+ADMIN_EMAIL=admin@youragency.com
+✉️ STEP 3: Trigger Email in Complaint Controller
+Update the submitComplaint function in controllers/complaintController.js:
+
+js
+Copy
+Edit
+const { sendComplaintNotification } = require('../utils/emailService');
+const User = require('../models/User'); // If not already included
+
+exports.submitComplaint = async (req, res) => {
+  try {
+    const { type, message, targetGuard } = req.body;
+    const file = req.file ? `/uploads/${req.file.filename}` : null;
+
+    const complaint = new Complaint({
+      submittedBy: req.user.id,
+      type,
+      message,
+      targetGuard,
+      attachedFile: file
+    });
+
+    await complaint.save();
+
+    // Get user info for email
+    const submittedBy = await User.findById(req.user.id).select('username');
+    let targetGuardUser = null;
+    if (targetGuard) {
+      targetGuardUser = await User.findById(targetGuard).select('username');
+    }
+
+    // Send email
+    await sendComplaintNotification({
+      type,
+      message,
+      submittedBy,
+      targetGuard: targetGuardUser
+    });
+
+    res.status(201).json({ message: 'Complaint submitted & email sent', complaint });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to submit', details: err.message });
+  }
+};
+📬 TEST Example Output (Admin Email)
+Subject: [New COMPLAINT] Submitted by JohnDoe
+
+Body:
+
+vbnet
+Copy
+Edit
+New COMPLAINT Received
+
+Submitted By: JohnDoe  
+Targeted Guard: Guard123  
+Message: Guard was caught sleeping on duty.
+
+Check the dashboard for more details.
+✅ BONUS OPTIONS
+Feature	How to Add
+🔄 Multiple admins	Replace to: with array of emails → ['admin1@...', 'hr@...']
+📎 Attach file	Add attachments in mailOptions if complaint has a file
+📅 Weekly summaries	Use a cron job (node-cron) for digest reports
+
+Would you like help sending weekly complaint summaries to HR or enabling client/guard notification replies?
+
+
+
+You said:
+Multiple admins	Replace to: with array of emails → ['admin1@...', 'hr@...']
+
+ChatGPT said:
+Perfect! If you want to notify multiple admins (e.g. HR, supervisors), all you have to do is update the to field in the email options to be an array of email addresses.
+
+✅ How to Send Email to Multiple Admins
+🧠 STEP 1: Update .env or Config
+Instead of a single ADMIN_EMAIL, you can use a comma-separated list or set them in code.
+
+Option 1: Comma-separated in .env
+graphql
+Copy
+Edit
+ADMIN_EMAILS=admin1@example.com,hr@example.com,supervisor@example.com
+Then parse it like this:
+
+js
+Copy
+Edit
+const adminEmails = process.env.ADMIN_EMAILS.split(',').map(email => email.trim());
+Option 2: Hardcoded in emailService.js (if preferred)
+js
+Copy
+Edit
+const adminEmails = ['admin1@example.com', 'hr@example.com', 'supervisor@example.com'];
+✉️ STEP 2: Update sendComplaintNotification() Function
+utils/emailService.js
+js
+Copy
+Edit
+exports.sendComplaintNotification = async (complaintData) => {
+  const { type, message, submittedBy, targetGuard } = complaintData;
+
+  const adminEmails = process.env.ADMIN_EMAILS.split(',').map(email => email.trim());
+
+  const mailOptions = {
+    from: `"Mither 3 Security" <${process.env.EMAIL_USER}>`,
+    to: adminEmails, // ✅ this is now an array
+    subject: `[New ${type.toUpperCase()}] Submitted by ${submittedBy.username}`,
+    html: `
+      <h3>New ${type.toUpperCase()} Received</h3>
+      <p><strong>Submitted By:</strong> ${submittedBy.username}</p>
+      ${targetGuard ? `<p><strong>Targeted Guard:</strong> ${targetGuard.username}</p>` : ''}
+      <p><strong>Message:</strong> ${message}</p>
+      <p><em>Check the dashboard for more details.</em></p>
+    `
+  };
+
+  return transporter.sendMail(mailOptions);
+};
+✅ Result
+All listed admins in the array will receive the same email notification instantly when a complaint or feedback is submitted.
+
+🔐 Tips for Production
+Use BCC if you want to hide email addresses between recipients
+
+Use reply-to to let admins respond directly to the sender
+
+Use an App Password if you're using Gmail with 2FA enabled
+
+Would you like to:
+
+Add email template styling (e.g., company branding)?
+
+Add role-based email routing (e.g., complaints to HR, feedback to QA)?
+
+
+
+You said:
+log in and authentication sent to gmail
+
+ChatGPT said:
+To implement login and authentication with email verification via Gmail, you’ll combine:
+
+✅ Features You Want:
+User Registration/Login
+
+Send verification or login confirmation to Gmail
+
+Use JWT for session/auth
+
+Optional: Password reset via email
+
+🛠️ Step-by-Step: Email-Verified Login System (Gmail)
+📦 STEP 1: Install Required Packages
+bash
+Copy
+Edit
+npm install nodemailer bcryptjs jsonwebtoken dotenv
+🧱 STEP 2: Setup Environment Variables (.env)
+env
+Copy
+Edit
+EMAIL_USER=yourcompany@gmail.com
+EMAIL_PASS=your-app-password
+JWT_SECRET=super-secret-jwt
+EMAIL_FROM=Mither 3 Security <yourcompany@gmail.com>
+Use App Passwords for Gmail if 2FA is enabled.
+
+🧠 STEP 3: Create User Model
+models/User.js (MongoDB)
+js
+Copy
+Edit
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+
+const userSchema = new mongoose.Schema({
+  email: { type: String, required: true, unique: true },
+  username: String,
+  password: { type: String, required: true },
+  role: { type: String, enum: ['admin', 'hr', 'guard', 'client'], default: 'guard' },
+  isVerified: { type: Boolean, default: false }
+});
+
+userSchema.pre('save', async function(next) {
+  if (this.isModified('password')) {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+  }
+  next();
+});
+
+module.exports = mongoose.model('User', userSchema);
+✉️ STEP 4: Nodemailer Setup
+utils/emailService.js
+js
+Copy
+Edit
+const nodemailer = require('nodemailer');
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+exports.sendVerificationEmail = async (email, token) => {
+  const link = `http://localhost:3000/verify?token=${token}`;
+  const mailOptions = {
+    from: process.env.EMAIL_FROM,
+    to: email,
+    subject: 'Verify your Mither 3 account',
+    html: `
+      <h3>Email Verification</h3>
+      <p>Click the link to verify your account:</p>
+      <a href="${link}">${link}</a>
+    `
+  };
+  await transporter.sendMail(mailOptions);
+};
+
+exports.sendLoginAlert = async (email, ip) => {
+  const mailOptions = {
+    from: process.env.EMAIL_FROM,
+    to: email,
+    subject: 'New Login Alert',
+    html: `<p>Someone just logged into your account. IP: ${ip}</p>`
+  };
+  await transporter.sendMail(mailOptions);
+};
+🔐 STEP 5: Auth Controller
+controllers/authController.js
+js
+Copy
+Edit
+const User = require('../models/User');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const { sendVerificationEmail, sendLoginAlert } = require('../utils/emailService');
+
+exports.register = async (req, res) => {
+  try {
+    const { email, password, username } = req.body;
+    const user = new User({ email, password, username });
+    await user.save();
+
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1d' });
+    await sendVerificationEmail(email, token);
+
+    res.status(201).json({ message: 'Registered. Check your email to verify.' });
+  } catch (err) {
+    res.status(400).json({ error: 'Registration failed', details: err.message });
+  }
+};
+
+exports.verify = async (req, res) => {
+  try {
+    const { token } = req.query;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findByIdAndUpdate(decoded.id, { isVerified: true });
+
+    res.send('Email verified successfully. You can now log in.');
+  } catch {
+    res.status(400).send('Invalid or expired token');
+  }
+};
+
+exports.login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+
+    if (!user || !(await bcrypt.compare(password, user.password)))
+      return res.status(400).json({ message: 'Invalid credentials' });
+
+    if (!user.isVerified)
+      return res.status(403).json({ message: 'Email not verified' });
+
+    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    // Send alert email
+    await sendLoginAlert(email, req.ip);
+
+    res.json({ token, message: 'Login successful' });
+  } catch (err) {
+    res.status(500).json({ error: 'Login failed', details: err.message });
+  }
+};
+🛣️ STEP 6: Auth Routes
+routes/authRoutes.js
+js
+Copy
+Edit
+const express = require('express');
+const router = express.Router();
+const { register, verify, login } = require('../controllers/authController');
+
+router.post('/register', register);
+router.get('/verify', verify);
+router.post('/login', login);
+
+module.exports = router;
+And in app.js:
+
+js
+Copy
+Edit
+app.use('/api/auth', require('./routes/authRoutes'));
+🔒 Resulting Flow
+Step	Action
+1️⃣ Register	POST /api/auth/register
+2️⃣ Email Sent	Link: /verify?token=...
+3️⃣ On click	Email marked as verified
+4️⃣ Login	If password correct and email is verified, login succeeds
+5️⃣ Login alert	Admin or user receives login notification via Gmail
+
+✅ Optional Enhancements
+Feature	Description
+🔁 Forgot password	Add a /forgot-password with token-based reset
+🎯 Role-based login routing	Redirect HR, Guard, Client to their own dashboards
+📅 Email verification expiry	Set 1-hour TTL on tokens
+
+Would you like me to help add Forgot Password, or integrate this auth flow into your existing guard/client HR system UI?
+
+
+
+You said:
+🔁 Forgot password	Add a /forgot-password with token-based reset
+🎯 Role-based login routing	Redirect HR, Guard, Client to their own dashboards
+📅 Email verification expiry	Set 1-hour TTL on tokens
+
+ChatGPT said:
+Awesome! Let’s extend your authentication system with those features step-by-step.
+
+1️⃣ Forgot Password with Token-Based Reset
+🔧 STEP 1: Add Password Reset Token Field
+Update your User model to include a reset token and expiration:
+
+js
+Copy
+Edit
+// models/User.js additions
+resetPasswordToken: String,
+resetPasswordExpires: Date,
+🔧 STEP 2: Create /forgot-password and /reset-password endpoints
+Controller additions (controllers/authController.js):
+js
+Copy
+Edit
+const crypto = require('crypto');
+
+// Forgot Password - generate reset token + email
+exports.forgotPassword = async (req, res) => {
+  const { email } = req.body;
+  const user = await User.findOne({ email });
+  if (!user) return res.status(400).json({ message: 'User not found' });
+
+  // Generate token & expiry (1 hour)
+  const token = crypto.randomBytes(20).toString('hex');
+  user.resetPasswordToken = token;
+  user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+  await user.save();
+
+  // Send reset email
+  const resetUrl = `http://localhost:3000/reset-password?token=${token}`;
+  await sendResetPasswordEmail(email, resetUrl);
+
+  res.json({ message: 'Password reset link sent to your email.' });
+};
+
+// Reset Password - verify token and update password
+exports.resetPassword = async (req, res) => {
+  const { token, newPassword } = req.body;
+  const user = await User.findOne({ 
+    resetPasswordToken: token, 
+    resetPasswordExpires: { $gt: Date.now() } 
+  });
+
+  if (!user) return res.status(400).json({ message: 'Invalid or expired token' });
+
+  user.password = newPassword;  // Will be hashed in pre-save hook
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpires = undefined;
+  await user.save();
+
+  res.json({ message: 'Password successfully updated.' });
+};
+Email sending utility (utils/emailService.js):
+js
+Copy
+Edit
+exports.sendResetPasswordEmail = async (email, resetUrl) => {
+  const mailOptions = {
+    from: process.env.EMAIL_FROM,
+    to: email,
+    subject: 'Mither 3 Security - Password Reset',
+    html: `<p>Click this link to reset your password:</p><a href="${resetUrl}">${resetUrl}</a>`
+  };
+  await transporter.sendMail(mailOptions);
+};
+Routes (routes/authRoutes.js):
+js
+Copy
+Edit
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
+2️⃣ Role-Based Login Routing
+Add role info in your JWT payload on login:
+
+js
+Copy
+Edit
+const token = jwt.sign(
+  { id: user._id, role: user.role },
+  process.env.JWT_SECRET,
+  { expiresIn: '7d' }
+);
+On client side, after login:
+Parse token to get role
+
+Redirect user to dashboard according to role
+
+Example (frontend pseudocode):
+
+js
+Copy
+Edit
+const role = decodeJwt(token).role;
+
+switch(role) {
+  case 'admin':
+    navigate('/admin-dashboard');
+    break;
+  case 'hr':
+    navigate('/hr-dashboard');
+    break;
+  case 'guard':
+    navigate('/guard-dashboard');
+    break;
+  case 'client':
+    navigate('/client-dashboard');
+    break;
+  default:
+    navigate('/login');
+}
+3️⃣ Email Verification Token Expiry (Set 1 Hour TTL)
+Change your registration token to expire in 1 hour instead of 1 day:
+
+js
+Copy
+Edit
+const token = jwt.sign(
+  { id: user._id },
+  process.env.JWT_SECRET,
+  { expiresIn: '1h' } // 1 hour expiry
+);
+Bonus: Add Middleware to check verification before login
+js
+Copy
+Edit
+if (!user.isVerified) {
+  return res.status(403).json({ message: 'Email not verified. Please check your inbox.' });
+}
