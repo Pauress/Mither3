@@ -1,0 +1,5 @@
+#Initialize the Project
+
+mkdir mither3-backend
+cd mither3-backend
+npm init -y
