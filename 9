@@ -1,0 +1,27 @@
+#Set Up Express Server
+
+@app.js
+
+const express = require('express');
+const cors = require('cors');
+const { connectMongo, connectSQL } = require('./config/db');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+connectMongo();
+connectSQL();
+
+app.use('/api/applicants', require('./routes/applicantRoutes'));
+app.use('/api/auth', require('./routes/authRoutes')); // Add this later
+
+module.exports = app;
+
+@server.js
+
+const app = require('./app');
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
