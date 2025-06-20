@@ -1,0 +1,29 @@
+# Connect MongoDB & MySQL
+
+#config/db.js
+
+const mongoose = require('mongoose');
+const { Sequelize } = require('sequelize');
+
+const connectMongo = async () => {
+  await mongoose.connect(process.env.MONGO_URI);
+  console.log('MongoDB connected');
+};
+
+const mysql = new Sequelize(process.env.MYSQL_DB, process.env.MYSQL_USER, process.env.MYSQL_PASSWORD, {
+  host: 'localhost',
+  dialect: 'mysql'
+});
+
+const connectSQL = async () => {
+  try {
+    await mysql.authenticate();
+    console.log('MySQL connected');
+  } catch (err) {
+    console.error('Unable to connect to MySQL:', err);
+  }
+};
+
+module.exports = { connectMongo, connectSQL, mysql };
+
+
