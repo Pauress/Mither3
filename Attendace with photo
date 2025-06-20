@@ -1,0 +1,140 @@
+🔧 STEP 1: Install multer for photo upload
+bash
+Copy
+Edit
+npm install multer
+📁 STEP 2: Create Folder Structure
+In routes/, controllers/, and models/, create:
+
+pgsql
+Copy
+Edit
+routes/
+  attendanceRoutes.js
+controllers/
+  attendanceController.js
+models/
+  Attendance.js
+uploads/
+  (Optional: local image storage if not using Firebase/S3)
+📦 STEP 3: Attendance Schema (MongoDB)
+models/Attendance.js
+js
+Copy
+Edit
+const mongoose = require('mongoose');
+
+const attendanceSchema = new mongoose.Schema({
+  guardId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  type: { type: String, enum: ['check-in', 'check-out'], required: true },
+  timestamp: { type: Date, default: Date.now },
+  photoUrl: String,
+  verified: { type: Boolean, default: false }
+});
+
+module.exports = mongoose.model('Attendance', attendanceSchema);
+📷 STEP 4: File Upload Middleware
+middleware/upload.js
+js
+Copy
+Edit
+const multer = require('multer');
+const path = require('path');
+
+const storage = multer.diskStorage({
+  destination: './uploads/',
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowed = ['.jpg', '.jpeg', '.png'];
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (!allowed.includes(ext)) {
+    return cb(new Error('Only images are allowed'), false);
+  }
+  cb(null, true);
+};
+
+const upload = multer({ storage, fileFilter });
+
+module.exports = upload;
+🧠 STEP 5: Attendance Controller
+controllers/attendanceController.js
+js
+Copy
+Edit
+const Attendance = require('../models/Attendance');
+const path = require('path');
+
+exports.logAttendance = async (req, res) => {
+  try {
+    const { type } = req.body;
+    const guardId = req.user.id; // pulled from JWT auth
+
+    const photo = req.file ? `/uploads/${req.file.filename}` : null;
+
+    const newEntry = new Attendance({
+      guardId,
+      type,
+      photoUrl: photo,
+      verified: true // In real-world, you'd do face verification
+    });
+
+    await newEntry.save();
+
+    res.status(201).json({ message: `${type} logged`, entry: newEntry });
+  } catch (err) {
+    res.status(500).json({ message: 'Error logging attendance', error: err.message });
+  }
+};
+
+exports.getGuardAttendance = async (req, res) => {
+  try {
+    const guardId = req.user.id;
+    const records = await Attendance.find({ guardId }).sort({ timestamp: -1 });
+    res.json(records);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to get attendance', error: err.message });
+  }
+};
+📍 STEP 6: Attendance Routes
+routes/attendanceRoutes.js
+js
+Copy
+Edit
+const express = require('express');
+const router = express.Router();
+const upload = require('../middleware/upload');
+const auth = require('../middleware/auth');
+const { logAttendance, getGuardAttendance } = require('../controllers/attendanceController');
+
+// Guard check-in/out with photo
+router.post('/', auth, upload.single('photo'), logAttendance);
+
+// View own attendance history
+router.get('/', auth, getGuardAttendance);
+
+module.exports = router;
+🧪 STEP 7: Test It with Postman
+POST /api/attendance
+
+Headers: Authorization: Bearer <your_token>
+
+Form-Data:
+
+type: check-in or check-out
+
+photo: upload a .jpg or .png image
+
+GET /api/attendance
+
+Returns your attendance history
+
+🧼 STEP 8: Update app.js
+js
+Copy
+Edit
+app.use('/uploads', express.static('uploads'));
+app.use('/api/attendance', require('./routes/attendanceRoutes'));
