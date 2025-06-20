@@ -1,0 +1,148 @@
+🧱 STEP 1: Create Feedback/Complaint Model (MongoDB)
+models/Complaint.js
+js
+Copy
+Edit
+const mongoose = require('mongoose');
+
+const complaintSchema = new mongoose.Schema({
+  submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  targetGuard: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Optional
+  type: { type: String, enum: ['complaint', 'feedback'], required: true },
+  message: { type: String, required: true },
+  attachedFile: String,
+  status: { type: String, enum: ['pending', 'resolved', 'escalated'], default: 'pending' },
+  submittedAt: { type: Date, default: Date.now },
+  resolvedAt: Date,
+  resolutionNote: String
+});
+
+module.exports = mongoose.model('Complaint', complaintSchema);
+📤 STEP 2: Create Controller
+controllers/complaintController.js
+js
+Copy
+Edit
+const Complaint = require('../models/Complaint');
+
+// Submit feedback or complaint
+exports.submitComplaint = async (req, res) => {
+  try {
+    const { type, message, targetGuard } = req.body;
+    const file = req.file ? `/uploads/${req.file.filename}` : null;
+
+    const newComplaint = new Complaint({
+      submittedBy: req.user.id,
+      type,
+      message,
+      targetGuard,
+      attachedFile: file
+    });
+
+    await newComplaint.save();
+    res.status(201).json({ message: 'Submission recorded', complaint: newComplaint });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to submit', details: err.message });
+  }
+};
+
+// Admin: View all complaints
+exports.getAllComplaints = async (req, res) => {
+  try {
+    const complaints = await Complaint.find()
+      .populate('submittedBy', 'username role')
+      .populate('targetGuard', 'username')
+      .sort({ submittedAt: -1 });
+    res.json(complaints);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load complaints' });
+  }
+};
+
+// Admin: Update complaint status
+exports.updateStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, resolutionNote } = req.body;
+
+    const complaint = await Complaint.findById(id);
+    if (!complaint) return res.status(404).json({ message: 'Not found' });
+
+    complaint.status = status;
+    complaint.resolutionNote = resolutionNote;
+    if (status === 'resolved') complaint.resolvedAt = new Date();
+
+    await complaint.save();
+    res.json({ message: 'Status updated', complaint });
+  } catch (err) {
+    res.status(500).json({ message: 'Could not update', error: err.message });
+  }
+};
+🛣️ STEP 3: Define Routes
+routes/complaintRoutes.js
+js
+Copy
+Edit
+const express = require('express');
+const router = express.Router();
+const auth = require('../middleware/auth');
+const upload = require('../middleware/upload');
+const {
+  submitComplaint,
+  getAllComplaints,
+  updateStatus
+} = require('../controllers/complaintController');
+
+// Submit feedback or complaint
+router.post('/', auth, upload.single('file'), submitComplaint);
+
+// Admin: Get all
+router.get('/', auth, getAllComplaints);
+
+// Admin: Update complaint status
+router.put('/:id/status', auth, updateStatus);
+
+module.exports = router;
+🧼 STEP 4: Register in app.js
+js
+Copy
+Edit
+app.use('/api/complaints', require('./routes/complaintRoutes'));
+✅ Example Use (Postman)
+🔹 POST /api/complaints
+Form Data
+
+type: complaint or feedback
+
+message: Guard was consistently late
+
+targetGuard: (optional guard ID)
+
+file: (optional image or doc)
+
+🔹 GET /api/complaints
+Returns full complaint list (admin only)
+
+🔹 PUT /api/complaints/:id/status
+Body:
+
+json
+Copy
+Edit
+{
+  "status": "resolved",
+  "resolutionNote": "Guard was reassigned after investigation."
+}
+📊 Bonus: Admin Dashboard Data Summary API
+Want stats for a frontend dashboard?
+
+js
+Copy
+Edit
+exports.getComplaintSummary = async (req, res) => {
+  const pending = await Complaint.countDocuments({ status: 'pending' });
+  const resolved = await Complaint.countDocuments({ status: 'resolved' });
+  const escalated = await Complaint.countDocuments({ status: 'escalated' });
+
+  res.json({ pending, resolved, escalated });
+};
