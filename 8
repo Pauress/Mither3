@@ -1,0 +1,30 @@
+#Create Routes and Controllers
+
+@routes/applicantRoutes.js
+
+const express = require('express');
+const router = express.Router();
+const { addApplicant, getApplicants } = require('../controllers/applicantController');
+
+router.post('/', addApplicant);
+router.get('/', getApplicants);
+
+module.exports = router;
+
+
+@controllers/applicantController.js
+
+const Applicant = require('../models/Applicant');
+
+exports.addApplicant = async (req, res) => {
+  const applicant = new Applicant(req.body);
+  await applicant.save();
+  res.json({ message: 'Applicant added' });
+};
+
+exports.getApplicants = async (req, res) => {
+  const applicants = await Applicant.find();
+  res.json(applicants);
+};
+
+
