@@ -1,0 +1,29 @@
+#Create Basic Models
+
+@models/Applicant.jsMongoDb
+
+const mongoose = require('mongoose');
+
+const applicantSchema = new mongoose.Schema({
+  name: String,
+  email: String,
+  phone: String,
+  documents: [String],
+  status: { type: String, default: 'pending' }
+});
+
+module.exports = mongoose.model('Applicant', applicantSchema);
+
+
+@models/User.jsMySql
+
+const { DataTypes } = require('sequelize');
+const { mysql } = require('../config/db');
+
+const User = mysql.define('User', {
+  username: DataTypes.STRING,
+  password: DataTypes.STRING,
+  role: DataTypes.ENUM('admin', 'hr', 'guard', 'client')
+});
+
+module.exports = User;
