@@ -1,0 +1,46 @@
+mither3-hcm-backend/
+│
+├── server.js                  # Main entry point (connects DB, starts server)
+├── app.js                     # Express app configuration (middleware, routes)
+├── .env                       # Environment variables (DB URI, JWT secret, etc.)
+├── .gitignore                 # Ignore node_modules, .env, etc.
+├── package.json               # Dependencies and scripts
+│
+├── 📁 config/
+│   └── db.js                  # MongoDB connection logic (optional if separate)
+│
+├── 📁 controllers/            # All business logic (one per entity/module)
+│   ├── applicantController.js
+│   ├── authController.js
+│   ├── guardController.js
+│   ├── feedbackController.js
+│   ├── replacementController.js
+│
+├── 📁 middlewares/            # Auth & error handling middleware
+│   ├── authMiddleware.js
+│   └── errorHandler.js        # Optional: centralized error handling
+│
+├── 📁 models/                 # Mongoose schemas for MongoDB
+│   ├── Applicant.js
+│   ├── User.js
+│   ├── Guard.js
+│   ├── Feedback.js
+│   └── ReplacementRequest.js
+│
+├── 📁 routes/                 # Express route definitions
+│   ├── applicantRoutes.js
+│   ├── authRoutes.js
+│   ├── guardRoutes.js
+│   ├── feedbackRoutes.js
+│   └── replacementRoutes.js
+│
+├── 📁 utils/                  # Helper functions (email, JWT, upload, etc.)
+│   ├── emailService.js
+│   ├── tokenUtils.js
+│   └── uploadHandler.js       # (Optional: for S3 or local uploads)
+│
+├── 📁 uploads/                # Local storage for uploaded files (if used)
+│   └── applicants/
+│
+└── 📁 logs/                   # (Optional) Logs for monitoring or audit
+    └── app.log
